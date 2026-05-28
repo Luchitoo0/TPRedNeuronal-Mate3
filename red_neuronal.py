@@ -10,8 +10,9 @@ red = pd.read_csv('winequality-red.csv', sep=';')
 white = pd.read_csv('winequality-white.csv', sep=';')
 df = pd.concat([red, white], ignore_index=True)
 
-# Binarizar variable objetivo: 1 = bueno (quality >= 6), 0 = malo
-df['quality'] = (df['quality'] >= 6).astype(int)
+# Binarizar variable objetivo: 1 = bueno (quality > promedio), 0 = malo
+umbral = df['quality'].mean()
+df['quality'] = (df['quality'] > umbral).astype(int)
 
 # Separar entradas y salida
 all_inputs = df.iloc[:, :-1].values   # 11 columnas fisicoquímicas
