@@ -6,9 +6,13 @@ import matplotlib.pyplot as plt
 # ============================================================
 # 1. CARGA Y PREPROCESAMIENTO DEL DATASET
 # ============================================================
-red = pd.read_csv('winequality-red.csv', sep=';')
-white = pd.read_csv('winequality-white.csv', sep=';')
-df = pd.concat([red, white], ignore_index=True)
+df_red   = pd.read_csv(r"wine+quality\winequality-red.csv",   sep=";")
+df_white = pd.read_csv(r"wine+quality\winequality-white.csv", sep=";")
+
+# df_red["type"]   = 0  
+# df_white["type"] = 1
+
+df = pd.concat([df_red, df_white], ignore_index=True)
 
 # Binarizar variable objetivo: 1 = bueno (quality > promedio), 0 = malo
 umbral = df['quality'].mean()
@@ -42,7 +46,7 @@ print(f"Registros de test: {X_test.shape[0]}")
 # Capa oculta:    8 neuronas + ReLU
 # Capa de salida: 1 neurona  + Sigmoid
 
-n_input  = 11   # features del dataset
+n_input = X_train.shape[1]   # features del dataset
 n_hidden = 32    # neuronas capa oculta
 n_output = 1    # clasificación binaria
 
@@ -86,19 +90,19 @@ def costo(A2, Y):
 # 7. BACKPROPAGATION
 # ============================================================
 def backward_prop(Z1, A1, Z2, A2, X, Y):
-    dC_dA2 = 2 * A2 - 2 * Y          # derivada del costo respecto A2
-    dA2_dZ2 = d_logistic(Z2)          # derivada sigmoid
-    dZ2_dA1 = w_output                 # derivada Z2 respecto A1
-    dA1_dZ1 = d_relu(Z1)              # derivada ReLU
+    dC_dA2  = 2 * A2 - 2 * Y
+    dA2_dZ2 = d_logistic(Z2)
 
-    # Gradientes capa de salida
-    dC_dW2 = dC_dA2 @ dA2_dZ2 @ A1.T
-    dC_dB2 = dC_dA2 @ dA2_dZ2 * 1
+    # Capa de salida
+    dC_dW2 = (dC_dA2 * dA2_dZ2) * A1.T
+    dC_dB2 = (dC_dA2 * dA2_dZ2)
 
-    # Gradientes capa oculta
-    dC_dA1 = dC_dA2 @ dA2_dZ2 @ dZ2_dA1
-    dC_dW1 = dC_dA1 @ dA1_dZ1 @ X.T
-    dC_dB1 = dC_dA1 @ dA1_dZ1 * 1
+    # Propagamos hacia capa oculta — acá está el cambio crítico
+    dC_dA1 = w_output.T * (dC_dA2 * dA2_dZ2)
+
+    # Capa oculta
+    dC_dW1 = (dC_dA1 * d_relu(Z1)) * X.T
+    dC_dB1 = (dC_dA1 * d_relu(Z1))
 
     return dC_dW1, dC_dB1, dC_dW2, dC_dB2
 
@@ -183,14 +187,13 @@ plt.savefig('curvas_entrenamiento.png', dpi=150)
 #plt.show()
 print("Gráfico guardado como curvas_entrenamiento.png")
 
-
 # Vino tinto clásico de buena calidad
 vino1 = np.array([[8.0, 0.25, 0.45, 2.5, 0.05, 15.0, 80.0, 0.994, 3.3, 0.7, 11.5]])
 
-# Vino barato con muchos sulfatos y alta acidez
+# Vino barato con muchos sulfatos y alta acidez (tinto)
 vino2 = np.array([[10.0, 0.65, 0.05, 5.0, 0.12, 8.0, 180.0, 0.999, 3.1, 0.4, 9.0]])
 
-# Vino en el límite, parámetros mediocres
+# Vino en el límite, parámetros mediocres (blanco)
 vino3 = np.array([[7.5, 0.35, 0.25, 3.0, 0.07, 20.0, 110.0, 0.996, 3.25, 0.55, 10.8]])
 
 for i, vino in enumerate([vino1, vino2, vino3], 1):
