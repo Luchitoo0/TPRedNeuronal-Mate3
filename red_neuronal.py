@@ -15,19 +15,23 @@ umbral = df['quality'].mean()
 df['quality'] = (df['quality'] > umbral).astype(int)
 
 # Separar entradas y salida
-all_inputs = df.iloc[:, :-1].values   # 11 columnas fisicoquímicas
+all_inputs  = df.iloc[:, :-1].values
 all_outputs = df['quality'].values
 
-input_min = all_inputs.min(axis=0)
-input_max = all_inputs.max(axis=0)
+# Primero dividir, DESPUÉS normalizar
+X_train, X_test, Y_train, Y_test = train_test_split(
+    all_inputs, all_outputs, test_size=1/3, random_state=42
+)
 
-# Normalización Min-Max
-all_inputs = (all_inputs - input_min) / (input_max - input_min)
+# Calcular min y max SOLO con los datos de entrenamiento
+input_min = X_train.min(axis=0)
+input_max = X_train.max(axis=0)
 
-# Split entrenamiento / test (2/3 - 1/3)
-X_train, X_test, Y_train, Y_test = train_test_split(all_inputs, all_outputs, test_size=1/3, random_state=42)
+# Aplicar la misma normalización a train y test
+X_train = (X_train - input_min) / (input_max - input_min)
+X_test  = (X_test  - input_min) / (input_max - input_min)
 
-n = X_train.shape[0]  # cantidad de registros de entrenamiento
+n = X_train.shape[0]
 print(f"Registros de entrenamiento: {n}")
 print(f"Registros de test: {X_test.shape[0]}")
 
