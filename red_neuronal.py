@@ -3,57 +3,44 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 
-# ============================================================
 # 1. CARGA Y PREPROCESAMIENTO DEL DATASET
-# ============================================================
-df_red   = pd.read_csv(r"wine+quality\winequality-red.csv",   sep=";")
-df_white = pd.read_csv(r"wine+quality\winequality-white.csv", sep=";")
+red = pd.read_csv("wine+quality\winequality-red.csv",   sep=";")
+white = pd.read_csv("wine+quality\winequality-white.csv", sep=";")
+df = pd.concat([red, white], ignore_index=True)
 
-# df_red["type"]   = 0  
-# df_white["type"] = 1
-
-df = pd.concat([df_red, df_white], ignore_index=True)
-
-# Binarizar variable objetivo: 1 = bueno (quality > promedio), 0 = malo
+# Binarizar variable objetivo: 1 = bueno (calidad > promedio), 0 = malo (calidad <= promedio)
 umbral = df['quality'].mean()
 df['quality'] = (df['quality'] > umbral).astype(int)
 
 # Separar entradas y salida
-all_inputs  = df.iloc[:, :-1].values
+all_inputs  = df.iloc[:, :-1].values   # 11 columnas fisicoquímicas
 all_outputs = df['quality'].values
 
-# Primero dividir, DESPUÉS normalizar
-X_train, X_test, Y_train, Y_test = train_test_split(
-    all_inputs, all_outputs, test_size=1/3, random_state=42
-)
+# Split primero, normalizar después (evita data leakage)
+X_train, X_test, Y_train, Y_test = train_test_split(all_inputs, all_outputs, test_size=1/3, random_state=42)
 
-# Calcular min y max SOLO con los datos de entrenamiento
+# Calcular min/max SOLO sobre el conjunto de entrenamiento
 input_min = X_train.min(axis=0)
 input_max = X_train.max(axis=0)
 
-# Aplicar la misma normalización a train y test
+# Aplicar la misma transformación a train y test
 X_train = (X_train - input_min) / (input_max - input_min)
 X_test  = (X_test  - input_min) / (input_max - input_min)
 
-n = X_train.shape[0]
+n = X_train.shape[0]  # cantidad de registros de entrenamiento
 print(f"Registros de entrenamiento: {n}")
 print(f"Registros de test: {X_test.shape[0]}")
 
-# ============================================================
 # 2. ARQUITECTURA DE LA RED
-# ============================================================
 # Capa de entrada: 11 neuronas (una por feature)
 # Capa oculta:    8 neuronas + ReLU
 # Capa de salida: 1 neurona  + Sigmoid
 
-n_input = X_train.shape[1]   # features del dataset
+n_input  = 11   # features del dataset
 n_hidden = 32    # neuronas capa oculta
 n_output = 1    # clasificación binaria
 
-# ============================================================
 # 3. INICIALIZACIÓN DE PESOS Y SESGOS
-# ============================================================
-
 np.random.seed(3)
 w_hidden = np.random.randn(n_hidden, n_input) * np.sqrt(2 / n_input)
 w_output = np.random.randn(n_output, n_hidden) * np.sqrt(2 / n_hidden)
@@ -61,18 +48,22 @@ w_output = np.random.randn(n_output, n_hidden) * np.sqrt(2 / n_hidden)
 b_hidden = np.zeros((n_hidden, 1))
 b_output = np.zeros((n_output, 1))
 
-# ============================================================
+
 # 4. FUNCIONES DE ACTIVACIÓN Y SUS DERIVADAS
-# ============================================================
-relu       = lambda x: np.maximum(x, 0)
-logistic   = lambda x: 1 / (1 + np.exp(-x))
+def relu(x):
+    return np.maximum(x, 0)
 
-d_relu     = lambda x: x > 0
-d_logistic = lambda x: np.exp(-x) / (1 + np.exp(-x)) ** 2
+def logistic(x):
+    return 1 / (1 + np.exp(-x))
 
-# ============================================================
+def d_relu(x):
+    return (x > 0).astype(float)
+
+def d_logistic(x):
+    return np.exp(-x) / (1 + np.exp(-x)) ** 2
+
+
 # 5. FORWARD PROPAGATION
-# ============================================================
 def forward_prop(X):
     Z1 = w_hidden @ X + b_hidden   # combinación lineal capa oculta
     A1 = relu(Z1)                  # activación ReLU
@@ -80,35 +71,31 @@ def forward_prop(X):
     A2 = logistic(Z2)              # activación Sigmoid -> probabilidad [0,1]
     return Z1, A1, Z2, A2
 
-# ============================================================
+
 # 6. FUNCIÓN DE COSTO (MSE)
-# ============================================================
 def costo(A2, Y):
     return np.mean((A2 - Y) ** 2)
 
-# ============================================================
+
 # 7. BACKPROPAGATION
-# ============================================================
 def backward_prop(Z1, A1, Z2, A2, X, Y):
-    dC_dA2  = 2 * A2 - 2 * Y
-    dA2_dZ2 = d_logistic(Z2)
+    dC_dA2 = 2 * A2 - 2 * Y           # (1,1)
+    dA2_dZ2 = d_logistic(Z2)           # (1,1)
+    dA1_dZ1 = d_relu(Z1)               # (n_hidden,1)
 
-    # Capa de salida
-    dC_dW2 = (dC_dA2 * dA2_dZ2) * A1.T
-    dC_dB2 = (dC_dA2 * dA2_dZ2)
+    # Gradientes capa de salida
+    dC_dW2 = dC_dA2 * dA2_dZ2 @ A1.T  # (1,1)*(1,1) @ (1,n_hidden) = (1,n_hidden)
+    dC_dB2 = dC_dA2 * dA2_dZ2         # (1,1)
 
-    # Propagamos hacia capa oculta — acá está el cambio crítico
-    dC_dA1 = w_output.T * (dC_dA2 * dA2_dZ2)
-
-    # Capa oculta
-    dC_dW1 = (dC_dA1 * d_relu(Z1)) * X.T
-    dC_dB1 = (dC_dA1 * d_relu(Z1))
+    # Gradientes capa oculta (regla de la cadena: propagamos el error hacia atrás)
+    dC_dA1 = w_output.T @ (dC_dA2 * dA2_dZ2)  # (n_hidden,1) @ (1,1) = (n_hidden,1)
+    dC_dW1 = dC_dA1 * dA1_dZ1 @ X.T            # (n_hidden,1)*(n_hidden,1) @ (1,n_input) = (n_hidden,n_input)
+    dC_dB1 = dC_dA1 * dA1_dZ1                   # (n_hidden,1)
 
     return dC_dW1, dC_dB1, dC_dW2, dC_dB2
 
-# ============================================================
+
 # 8. ENTRENAMIENTO - DESCENSO POR GRADIENTE ESTOCÁSTICO
-# ============================================================
 L = 0.05         # tasa de aprendizaje
 epochs = 100_000   # iteraciones
 
@@ -136,7 +123,7 @@ for i in range(epochs):
     w_output -= L * dW2
     b_output -= L * dB2
 
-    # Registrar métricas cada 100 epochs
+    # Registrar métricas cada 1000 epochs
     if i % 1000 == 0:
         # Loss
         _, _, _, A2_train = forward_prop(X_train.T)
@@ -150,16 +137,13 @@ for i in range(epochs):
         train_accuracy.append(acc_train)
         test_accuracy.append(acc_test)
 
-# ============================================================
+
 # 9. RESULTADOS FINALES
-# ============================================================
 _, _, _, A2_final = forward_prop(X_test.T)
 acc_final = np.mean((A2_final.flatten() >= 0.5).astype(int) == Y_test)
 print(f"\nAccuracy final en test: {acc_final:.4f} ({acc_final*100:.2f}%)")
 
-# ============================================================
 # 10. CURVAS DE ENTRENAMIENTO
-# ============================================================
 epochs_range = range(0, epochs, 1000)
 
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
@@ -184,16 +168,17 @@ ax2.grid(True, alpha=0.3)
 
 plt.tight_layout()
 plt.savefig('curvas_entrenamiento.png', dpi=150)
-#plt.show()
+plt.show()
 print("Gráfico guardado como curvas_entrenamiento.png")
+
 
 # Vino tinto clásico de buena calidad
 vino1 = np.array([[8.0, 0.25, 0.45, 2.5, 0.05, 15.0, 80.0, 0.994, 3.3, 0.7, 11.5]])
 
-# Vino barato con muchos sulfatos y alta acidez (tinto)
+# Vino barato con muchos sulfatos y alta acidez
 vino2 = np.array([[10.0, 0.65, 0.05, 5.0, 0.12, 8.0, 180.0, 0.999, 3.1, 0.4, 9.0]])
 
-# Vino en el límite, parámetros mediocres (blanco)
+# Vino en el límite, parámetros mediocres
 vino3 = np.array([[7.5, 0.35, 0.25, 3.0, 0.07, 20.0, 110.0, 0.996, 3.25, 0.55, 10.8]])
 
 for i, vino in enumerate([vino1, vino2, vino3], 1):
